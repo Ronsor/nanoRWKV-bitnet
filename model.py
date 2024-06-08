@@ -20,6 +20,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from modules import *
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -64,12 +66,12 @@ class RWKV_TimeMix_x051a(nn.Module):
 
         self.time_shift = nn.ZeroPad2d((0, 0, 1, -1))
 
-        self.receptance = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        self.key = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        self.value = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        self.gate = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.receptance = BitLinear(config.n_embd, config.n_embd, bias=config.bias)
+        self.key = BitLinear(config.n_embd, config.n_embd, bias=config.bias)
+        self.value = BitLinear(config.n_embd, config.n_embd, bias=config.bias)
+        self.gate = BitLinear(config.n_embd, config.n_embd, bias=config.bias)
 
-        self.output = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.output = BitLinear(config.n_embd, config.n_embd, bias=config.bias)
         self.ln_x = nn.GroupNorm(self.n_head, config.n_embd, eps=(1e-5)*64)
 
         self.dropout = nn.Dropout(config.dropout)
@@ -152,9 +154,9 @@ class RWKV_ChannelMix_x051a(nn.Module):
             self.time_maa_k = nn.Parameter(1.0 - torch.pow(ddd, ratio_1_to_almost0))
             self.time_maa_r = nn.Parameter(1.0 - torch.pow(ddd, ratio_1_to_almost0))
 
-        self.key = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
-        self.value = nn.Linear(3 * config.n_embd, config.n_embd, bias=config.bias)
-        self.receptance = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        self.key = BitLinear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.value = BitLinear(3 * config.n_embd, config.n_embd, bias=config.bias)
+        self.receptance = BitLinear(config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -191,7 +193,7 @@ class GPTConfig:
     n_head: int = 12
     n_embd: int = 768
     dropout: float = 0.0
-    bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
 class GPT(nn.Module):
 
@@ -203,7 +205,7 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            #wpe = nn.Embedding(config.block_size, config.n_embd),
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, i) for i in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
@@ -234,7 +236,7 @@ class GPT(nn.Module):
         """
         n_params = sum(p.numel() for p in self.parameters())
         if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
+            n_params -= 0 #self.transformer.wpe.weight.numel()
         return n_params
 
     def _init_weights(self, module):
@@ -253,8 +255,8 @@ class GPT(nn.Module):
 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-        x = self.transformer.drop(tok_emb + pos_emb)
+        #pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+        x = self.transformer.drop(tok_emb)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -359,6 +361,7 @@ class GPT(nn.Module):
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
         use_fused = fused_available and device_type == 'cuda'
         extra_args = dict(fused=True) if use_fused else dict()
+
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
         print(f"using fused AdamW: {use_fused}")
 

@@ -1,8 +1,11 @@
-# nanoRWKV (WIP)
+# nanoRWKV-bitnet
 
 ![nanoRWKV](assets/nanoRWKV-loss.png)
 
 This is RWKV "x051a" which does not require custom CUDA kernel to train, so it works for any GPU / CPU.
+
+It has been modified to use BitLinear instead of regular linear layers. For more information, see
+the paper covering BitNet b1.58: <https://arxiv.org/abs/2402.17764>.
 
 Reference: [RWKV-LM](https://github.com/BlinkDL/RWKV-LM) <3
 
