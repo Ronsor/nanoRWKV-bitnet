@@ -5,7 +5,7 @@ import os
 import pickle
 from contextlib import nullcontext
 import torch
-import tiktoken
+import tokenizer
 from model import GPTConfig, GPT
 
 # -----------------------------------------------------------------------------
